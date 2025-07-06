@@ -1,81 +1,77 @@
-// --- WebSocket interaction (заглушка адреса) ---
 const ws = new WebSocket('ws://localhost:8080/ws');
 
-// Состояние
 let isRunning = false;
+let isPaused = false;
 let startTime = null;
 let timerInterval = null;
+let elapsedSeconds = 0;
 
-// DOM
 const btnStart = document.getElementById('btn-start');
 const btnPause = document.getElementById('btn-pause');
 const btnStop = document.getElementById('btn-stop');
 const startTimeEl = document.getElementById('start-time');
 
-// Формат времени HH:MM
-function formatTime(date) {
-    return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+function updateTimer() {
+    const hours = Math.floor(elapsedSeconds / 3600);
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+    const seconds = elapsedSeconds % 60;
+    startTimeEl.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Обновить отображение времени
-function updateTime() {
-    if (isRunning && startTime) {
-        startTimeEl.textContent = formatTime(startTime);
-    } else {
-        startTimeEl.textContent = '--:--';
-    }
-}
-
-// Обновить кнопки
 function updateButtons() {
-    btnStart.disabled = isRunning;
+    btnStart.disabled = isRunning && !isPaused;
+    btnPause.disabled = !isRunning;
     btnStop.disabled = !isRunning;
-    btnStart.classList.toggle('active', !isRunning);
-    btnStop.classList.toggle('active', isRunning);
 }
 
-// Запуск испытания
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    elapsedSeconds = Math.floor((new Date() - startTime) / 1000);
+    timerInterval = setInterval(() => {
+        elapsedSeconds++;
+        updateTimer();
+    }, 1000);
+}
+
 btnStart.addEventListener('click', () => {
     ws.send(JSON.stringify({ action: 'start' }));
 });
 
-// Остановка испытания
+btnPause.addEventListener('click', () => {
+    if (isRunning) {
+        ws.send(JSON.stringify({ action: 'pause' }));
+    }
+});
+
 btnStop.addEventListener('click', () => {
     ws.send(JSON.stringify({ action: 'stop' }));
 });
 
-// --- WebSocket events ---
-ws.onopen = () => {
-    // При подключении — запросить состояние
-    ws.send(JSON.stringify({ action: 'get_state' }));
-};
-
 ws.onmessage = (event) => {
-    // Ожидаем сообщения вида: { running: true/false, startTime: timestamp }
     try {
         const data = JSON.parse(event.data);
-        isRunning = !!data.running;
-        startTime = data.startTime ? new Date(data.startTime) : null;
-        updateTime();
+        isRunning = data.running;
+        isPaused = data.paused;
+
+        if (data.startTime) {
+            startTime = new Date(data.startTime);
+            if (isRunning && !isPaused) {
+                startTimer();
+            }
+        }
+
+        if (!isRunning || isPaused) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+
         updateButtons();
+        updateTimer();
     } catch (e) {
-        // ignore
+        console.error("Error:", e);
     }
 };
 
-ws.onerror = () => {
-    // Ошибка соединения — отключить кнопки
-    btnStart.disabled = true;
-    btnStop.disabled = true;
-    startTimeEl.textContent = 'нет связи';
-};
-
-ws.onclose = () => {
-    btnStart.disabled = true;
-    btnStop.disabled = true;
-    startTimeEl.textContent = 'нет связи';
-};
-
-// --- Инициализация ---
-updateTime();
+// Инициализация
+startTimeEl.textContent = '00:00:00';
 updateButtons();
