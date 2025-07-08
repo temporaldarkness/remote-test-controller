@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"os"
 )
 
 type State struct {
@@ -20,12 +21,15 @@ var (
 	upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
 	state      = State{}
 	stateMutex sync.Mutex
+	
+	infoLog    = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	errorLog   = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Upgrade error:", err)
+		errorLog.Println("Connection upgrade error:", err)
 		return
 	}
 	defer conn.Close()
@@ -33,16 +37,18 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Read error:", err)
+			errorLog.Println("Message reading error:", err)
 			break
 		}
 
 		var req map[string]interface{}
 		if err := json.Unmarshal(msg, &req); err != nil {
+			errorLog.Println("Message unmarshalling error:", err)
 			continue
 		}
 
 		stateMutex.Lock()
+		infoLog.Println("Performing action:", req["action"])
 		switch req["action"] {
 		case "start":
 			if !state.Running {
@@ -72,8 +78,14 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		if !resp.StartTime.IsZero() {
 			out["startTime"] = resp.StartTime.Format(time.RFC3339)
 		}
-		b, _ := json.Marshal(out)
-		conn.WriteMessage(websocket.TextMessage, b)
+		b, err := json.Marshal(out)
+		if err != nil {
+			errorLog.Println("Response marshalling error:", err)
+			continue
+		}
+		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+			errorLog.Println("Response writing error:", err)
+		}
 	}
 }
 
@@ -81,6 +93,6 @@ func main() {
 	fs := http.FileServer(http.Dir(filepath.Join("..", "Front")))
 	http.Handle("/", fs)
 	http.HandleFunc("/ws", wsHandler)
-	log.Println("Сервер запущен на http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	infoLog.Println("Running on :8080!")
+	errorLog.Fatal(http.ListenAndServe(":8080", nil))
 }
