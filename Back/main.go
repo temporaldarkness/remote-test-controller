@@ -30,7 +30,7 @@ var (
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		errorLog.Printf("[%s] Connection upgrade error: %v", conn.RemoteAddr(), err)
+		errorLog.Printf("Connection upgrade error: %v", err)
 		return
 	}
 	defer conn.Close()
