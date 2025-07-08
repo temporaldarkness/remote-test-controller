@@ -29,7 +29,7 @@ var (
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		errorLog.Println("Connection upgrade error:", err)
+		errorLog.Printf("[%s] Connection upgrade error: %v", conn.RemoteAddr(), err)
 		return
 	}
 	defer conn.Close()
@@ -39,27 +39,27 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			errorLog.Println("Message reading error:", err)
+			errorLog.Printf("[%s] Message reading error: %v", conn.RemoteAddr(), err)
 			break
 		}
 
 		var req map[string]interface{}
 		if err := json.Unmarshal(msg, &req); err != nil {
-			errorLog.Println("Message unmarshalling error:", err)
+			errorLog.Printf("[%s] Message unmarshalling error: %v", conn.RemoteAddr(), err)
 			continue
 		}
 
 		stateMutex.Lock()
 		action, ok := req["action"].(string)
 		if !ok {
-			errorLog.Printf("Invalid action type: %T", req["action"])
+			errorLog.Printf("[%s] Invalid action type: %T", conn.RemoteAddr(), req["action"])
 			continue
 		}
 		
 		switch action {
 			case "start":
 				if !state.Running {
-					infoLog.Println("Performing action: Start")
+					infoLog.Printf("[%s] Performing action: Start", conn.RemoteAddr())
 					state.Running = true
 					state.StartTime = time.Now().UTC()
 					state.PausedAt = time.Time{}
@@ -69,17 +69,17 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 					state.PausedAt = time.Time{}
 				}
 			case "pause":
-				infoLog.Println("Performing action: Pause")
+				infoLog.Printf("[%s] Performing action: Pause", conn.RemoteAddr())
 				if state.Running && state.PausedAt.IsZero() {
 					state.PausedAt = time.Now().UTC()
 				}
 			case "stop":
-				infoLog.Println("Performing action: Stop")
+				infoLog.Printf("[%s] Performing action: Stop", conn.RemoteAddr())
 				state.Running = false
 				state.StartTime = time.Time{}
 				state.PausedAt = time.Time{}
 			default:
-				infoLog.Println("Unknown action:", action)
+				infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)
 		}
 		resp := State{
 			Running: state.Running,
@@ -97,11 +97,11 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		b, err := json.Marshal(out)
 		if err != nil {
-			errorLog.Println("Response marshalling error:", err)
+			errorLog.Printf("[%s] Response marshalling error: %v", conn.RemoteAddr(), err)
 			continue
 		}
 		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
-			errorLog.Println("Response writing error:", err)
+			errorLog.Printf("[%s] Response writing error: %v", conn.RemoteAddr(), err)
 		}
 	}
 }
