@@ -47,6 +47,10 @@ btnStop.addEventListener('click', () => {
     ws.send(JSON.stringify({ action: 'stop' }));
 });
 
+ws.addEventListener('open', () => {
+	ws.send(JSON.stringify({ action: 'update' }));
+});
+
 ws.onmessage = (event) => {
     try {
         const data = JSON.parse(event.data);
