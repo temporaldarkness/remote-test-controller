@@ -20,7 +20,7 @@ function updateTimer() {
 
 function updateButtons() {
     btnStart.disabled = isRunning && !isPaused;
-    btnPause.disabled = !isRunning;
+    btnPause.disabled = !isRunning || isPaused;
     btnStop.disabled = !isRunning;
 }
 
