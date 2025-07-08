@@ -1,10 +1,9 @@
-const ws = new WebSocket('ws://localhost:8080/ws');
+const ws = new WebSocket("ws://localhost:8080/ws");
 
+let timerInterval = null;
+let startTime = null;
 let isRunning = false;
 let isPaused = false;
-let startTime = null;
-let timerInterval = null;
-let elapsedSeconds = 0;
 
 const btnStart = document.getElementById('btn-start');
 const btnPause = document.getElementById('btn-pause');
@@ -12,10 +11,26 @@ const btnStop = document.getElementById('btn-stop');
 const startTimeEl = document.getElementById('start-time');
 
 function updateTimer() {
-    const hours = Math.floor(elapsedSeconds / 3600);
-    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-    const seconds = elapsedSeconds % 60;
-    startTimeEl.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    if (startTime && isRunning && !isPaused) {
+        const now = new Date();
+        const diff = Math.floor((now - startTime) / 1000);
+        const hours = Math.floor(diff / 3600);
+        const minutes = Math.floor((diff % 3600) / 60);
+        const seconds = diff % 60;
+        startTimeEl.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+}
+
+function startTimer() {
+    stopTimer();
+    updateTimer();
+    timerInterval = setInterval(updateTimer, 1000);
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    startTimeEl.textContent = '00:00:00';
 }
 
 function updateButtons() {
@@ -24,56 +39,39 @@ function updateButtons() {
     btnStop.disabled = !isRunning;
 }
 
-function startTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-    elapsedSeconds = Math.floor((new Date() - startTime) / 1000);
-    timerInterval = setInterval(() => {
-        elapsedSeconds++;
-        updateTimer();
-    }, 1000);
-}
+ws.onopen = function() {
+    ws.send(JSON.stringify({ action: "status" }));
+};
 
-btnStart.addEventListener('click', () => {
-    ws.send(JSON.stringify({ action: 'start' }));
-});
-
-btnPause.addEventListener('click', () => {
-    if (isRunning) {
-        ws.send(JSON.stringify({ action: 'pause' }));
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    isRunning = data.running;
+    isPaused = data.paused;
+    if (data.startTime) {
+        startTime = new Date(data.startTime);
+    } else {
+        startTime = null;
     }
-});
-
-btnStop.addEventListener('click', () => {
-    ws.send(JSON.stringify({ action: 'stop' }));
-});
-
-ws.addEventListener('open', () => {
-	ws.send(JSON.stringify({ action: 'update' }));
-});
-
-ws.onmessage = (event) => {
-    try {
-        const data = JSON.parse(event.data);
-        isRunning = data.running;
-        isPaused = data.paused;
-
-        if (data.startTime) {
-            startTime = new Date(data.startTime);
-            if (isRunning && !isPaused) {
-                startTimer();
-            }
-        }
-
-        if (!isRunning || isPaused) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-
-        updateButtons();
+    if (isRunning && !isPaused && startTime) {
+        startTimer();
+    } else if (isRunning && isPaused) {
+        stopTimer();
+        // Можно оставить последнее время на паузе
         updateTimer();
-    } catch (e) {
-        console.error("Error:", e);
+    } else {
+        stopTimer();
     }
+    updateButtons();
+};
+
+btnStart.onclick = function() {
+    ws.send(JSON.stringify({ action: "start" }));
+};
+btnPause.onclick = function() {
+    ws.send(JSON.stringify({ action: "pause" }));
+};
+btnStop.onclick = function() {
+    ws.send(JSON.stringify({ action: "stop" }));
 };
 
 // Инициализация
