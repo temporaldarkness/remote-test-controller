@@ -86,6 +86,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 					state.PausedAt = time.Time{}
 					hardwareStop()
 				}
+			case "update":
+				infoLog.Printf("[%s] Performing action: Update", conn.RemoteAddr())
 			default:
 				infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)
 		}
