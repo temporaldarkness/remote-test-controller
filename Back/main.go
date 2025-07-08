@@ -33,7 +33,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-
+	
+	conn.SetReadLimit(1024)
+	
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -48,27 +50,42 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		stateMutex.Lock()
-		infoLog.Println("Performing action:", req["action"])
-		switch req["action"] {
-		case "start":
-			if !state.Running {
-				state.Running = true
-				state.StartTime = time.Now().UTC()
-				state.PausedAt = time.Time{}
-			} else if !state.PausedAt.IsZero() {
-				state.StartTime = state.StartTime.Add(time.Since(state.PausedAt))
-				state.PausedAt = time.Time{}
-			}
-		case "pause":
-			if state.Running && state.PausedAt.IsZero() {
-				state.PausedAt = time.Now().UTC()
-			}
-		case "stop":
-			state.Running = false
-			state.StartTime = time.Time{}
-			state.PausedAt = time.Time{}
+		action, ok := req["action"].(string)
+		if !ok {
+			errorLog.Printf("Invalid action type: %T", req["action"])
+			continue
 		}
-		resp := state
+		
+		switch action {
+			case "start":
+				if !state.Running {
+					infoLog.Println("Performing action: Start")
+					state.Running = true
+					state.StartTime = time.Now().UTC()
+					state.PausedAt = time.Time{}
+				} else if !state.PausedAt.IsZero() {
+					now := time.Now().UTC()
+					state.StartTime = state.StartTime.Add(now.Sub(state.PausedAt))
+					state.PausedAt = time.Time{}
+				}
+			case "pause":
+				infoLog.Println("Performing action: Pause")
+				if state.Running && state.PausedAt.IsZero() {
+					state.PausedAt = time.Now().UTC()
+				}
+			case "stop":
+				infoLog.Println("Performing action: Stop")
+				state.Running = false
+				state.StartTime = time.Time{}
+				state.PausedAt = time.Time{}
+			default:
+				infoLog.Println("Unknown action:", action)
+		}
+		resp := State{
+			Running: state.Running,
+			StartTime: state.StartTime,
+			PausedAt: state.PausedAt,
+		}
 		stateMutex.Unlock()
 
 		out := map[string]interface{}{
