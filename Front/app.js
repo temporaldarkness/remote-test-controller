@@ -55,9 +55,8 @@ ws.onmessage = function(event) {
     if (isRunning && !isPaused && startTime) {
         startTimer();
     } else if (isRunning && isPaused) {
-        stopTimer();
-        // Можно оставить последнее время на паузе
-        updateTimer();
+        clearInterval(timerInterval);
+        timerInterval = null;
     } else {
         stopTimer();
     }
