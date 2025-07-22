@@ -12,6 +12,7 @@ const btnStop = document.getElementById('btn-stop');
 const startTimeEl = document.getElementById('start-time');
 const tempEl = document.getElementById('temperature');
 const rpmEl = document.getElementById('rpm');
+const powEl = document.getElementById('power');
 const nameEl = document.getElementById('test-object');
 const testEl = document.getElementById('test-number');
 
@@ -70,8 +71,11 @@ ws.onmessage = function(event) {
     const data = JSON.parse(event.data);
     isRunning = data.running;
     isPaused = data.paused;
-    tempEl.textContent = data.temperature.toFixed(1);
-    rpmEl.textContent = data.rpm;
+    
+    // Хардкод, фронт должен будет генерировать таблицу исходя из посланных сервером полей
+    tempEl.textContent = data.fields[0].value.toFixed(1);
+    rpmEl.textContent = data.fields[1].value;
+    powEl.textContent = data.fields[2].value;
     nameEl.textContent = data.name;
     testEl.textContent = data.test;
     if (data.startTime) {

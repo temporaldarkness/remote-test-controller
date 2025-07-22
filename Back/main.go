@@ -15,16 +15,29 @@ type Config struct {
 	Name    string `json:"name"`
 	Address string `json:"address"`
 	Key     string `json:"key"`
+	Fields  []Field `json:"fields"`
+}
+
+type Field struct {
+	Id string   `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type StateField struct {
+	Id string         `json:"id"`
+	Name  string      `json:"name"`
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
 }
 
 type State struct {
-	Running     bool      `json:"running"`
-	StartTime   time.Time `json:"startTime,omitempty"`
-	PausedAt    time.Time `json:"pausedAt,omitempty"` // Новое поле для времени паузы
-	RPM         int       `json:"rpm"`
-	Temperature float64   `json:"temperature"`
-	Test        string    `json:"test"` // Номер / название испытания
-	Name        string    `json:"name"` // Название установки
+	Running   bool         `json:"running"`
+	StartTime time.Time    `json:"startTime,omitempty"`
+	PausedAt  time.Time    `json:"pausedAt,omitempty"` // Новое поле для времени паузы
+	Fields    []StateField `json:"fields"`
+	Test      string       `json:"test"` // Номер / название испытания
+	Name      string       `json:"name"` // Название установки
 }
 
 var (
@@ -140,31 +153,24 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)
 		}
 		
-		if state.Running && state.PausedAt.IsZero() { // Работает
-			state.RPM = 1500 + (int(time.Now().Unix()) % 100) // Генерируем случайные обороты
-			state.Temperature = 115.2 + (float64(time.Now().Unix()%10) / 10.0)
-		} else { // Остановлен или на паузе
-			state.RPM = 0
-			state.Temperature = 25.0
-		}
+		hardwareUpdateFields() // Где-то здесь должно быть обращение к установке для получения её полей
+		
 		resp := State{
-			Running:     state.Running,
-			StartTime:   state.StartTime,
-			PausedAt:    state.PausedAt,
-			RPM:         state.RPM,
-			Temperature: state.Temperature,
-			Name:        state.Name,
-			Test:        state.Test,
+			Running:   state.Running,
+			StartTime: state.StartTime,
+			PausedAt:  state.PausedAt,
+			Name:      state.Name,
+			Test:      state.Test,
+			Fields:    state.Fields,
 		}
 		stateMutex.Unlock()
 
 		out := map[string]interface{}{
-			"running":     resp.Running,
-			"paused":      !resp.PausedAt.IsZero(),
-			"rpm":         resp.RPM,
-			"temperature": resp.Temperature,
-			"name":        resp.Name,
-			"test":        resp.Test,
+			"running": resp.Running,
+			"paused":  !resp.PausedAt.IsZero(),
+			"name":    resp.Name,
+			"test":    resp.Test,
+			"fields":  resp.Fields,
 		}
 		if !resp.StartTime.IsZero() {
 			out["startTime"] = resp.StartTime.Format(time.RFC3339)
@@ -198,6 +204,21 @@ func hardwareUnpause() {
 
 func hardwareCommand(command string) {
 	hardwareLog.Printf("Hardware command accepted: [%s]!", command)
+}
+
+// В действительном исполнении эта функция должна быть подогнана под набор используемых полей, так что хардкод не большая проблема
+func hardwareUpdateFields() {
+	if state.Running && state.PausedAt.IsZero() {
+		state.Fields[0].Value = 115.2 + (float64(time.Now().Unix()%10) / 10.0) // Temperature
+		state.Fields[1].Value = 1500 + (int(time.Now().Unix()) % 100) // RPM
+		state.Fields[2].Value = 100 + (int(time.Now().Unix() * 7) % 15) // Power
+	} else {
+		state.Fields[0].Value = 25.0 // Temperature
+		state.Fields[1].Value = 0 // RPM
+		state.Fields[2].Value = 0 // Power
+	} 
+	
+	//hardwareLog.Printf("Hardware fields updated!")
 }
 
 func loadConfig(filename string) (*Config, error) {
@@ -243,6 +264,22 @@ func main() {
 			infoLog.Println("Value of field 'Key' not found in config, falling back to defaults!")
 		}
 	}
+	
+	// Создание полей на основе значений конфига
+	stateFields := make([]StateField, len(cfg.Fields))
+	for i, field := range cfg.Fields {
+		switch field.Type {
+			case "string":
+				stateFields[i] = StateField{field.Id, field.Name, field.Type, ""}
+			case "int":
+				stateFields[i] = StateField{field.Id, field.Name, field.Type, 0}
+			case "float":
+				stateFields[i] = StateField{field.Id, field.Name, field.Type, 0.0}
+			default:
+				stateFields[i] = StateField{field.Id, field.Name, field.Type, nil}
+		}
+	}
+	state.Fields = stateFields
 	
 	state.Test = "001" // Устанавливаем значение теста заранее
 	

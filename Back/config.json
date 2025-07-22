@@ -1,5 +1,10 @@
 {
   "name": "Установка ПД-14",
   "address": ":8080",
-  "key": "test_key"
+  "key": "test_key",
+  "fields": [
+    {"id": "temperature", "name": "Температура, °C", "type": "float"},
+    {"id": "rpm", "name": "Обороты, об/мин", "type": "int"},
+    {"id": "power", "name": "Мощность, кВт",   "type": "int"}
+  ]
 }
