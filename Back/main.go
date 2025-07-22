@@ -42,7 +42,7 @@ type State struct {
 
 var (
 	upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	state      = State{}
+	states     = map[string]*State{} // Хранилище состояний по тестам
 	stateMutex sync.Mutex
 
 	infoLog     = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -53,7 +53,39 @@ var (
 	serverName    = "Sample Test Object"
 	serverAddress = ":8080"
 	serverKey     = ""
+
+	cfg           *Config // Глобальный конфиг
 )
+
+func getOrCreateState(test string, cfg *Config) *State {
+	if s, ok := states[test]; ok {
+		return s
+	}
+	// Создаём новое состояние для теста
+	stateFields := make([]StateField, len(cfg.Fields))
+	for i, field := range cfg.Fields {
+		switch field.Type {
+		case "string":
+			stateFields[i] = StateField{field.Id, field.Name, field.Type, ""}
+		case "int":
+			stateFields[i] = StateField{field.Id, field.Name, field.Type, 0}
+		case "float":
+			stateFields[i] = StateField{field.Id, field.Name, field.Type, 0.0}
+		default:
+			stateFields[i] = StateField{field.Id, field.Name, field.Type, nil}
+		}
+	}
+	s := &State{
+		Running:   false,
+		StartTime: time.Time{},
+		PausedAt:  time.Time{},
+		Fields:    stateFields,
+		Test:      test,
+		Name:      serverName,
+	}
+	states[test] = s
+	return s
+}
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -92,8 +124,16 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		action, ok := req["action"].(string)
 		if !ok {
 			errorLog.Printf("[%s] Invalid action type: %T", conn.RemoteAddr(), req["action"])
+			stateMutex.Unlock()
 			continue
 		}
+
+		// Определяем текущий тест
+		test := "001"
+		if t, ok := req["test"].(string); ok && t != "" {
+			test = t
+		}
+		state := getOrCreateState(test, cfg)
 
 		switch action {
 		case "start":
@@ -102,6 +142,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 				state.Running = true
 				state.StartTime = time.Now().UTC()
 				state.PausedAt = time.Time{}
+				resetFieldsToDefault(state)
 				hardwareStart()
 			} else if !state.PausedAt.IsZero() {
 				infoLog.Printf("[%s] Performing action: Start (Unpause)", conn.RemoteAddr())
@@ -122,13 +163,27 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 				state.Running = false
 				state.StartTime = time.Time{}
 				state.PausedAt = time.Time{}
+				resetFieldsToDefault(state)
 				hardwareStop()
 			}
+			// Всегда сбрасываем состояние после stop
+			state.Running = false
+			state.StartTime = time.Time{}
+			state.PausedAt = time.Time{}
+			resetFieldsToDefault(state)
 		case "status":
 			infoLog.Printf("[%s] Performing action: Status", conn.RemoteAddr())
 		case "ping":
 			break
 		case "changeTest":
+			if t, ok := req["test"].(string); ok && t != "" {
+				state = getOrCreateState(t, cfg)
+				// УБРАТЬ сброс состояния!
+				// state.Running = false
+				// state.StartTime = time.Time{}
+				// state.PausedAt = time.Time{}
+				// resetFieldsToDefault(state)
+			}
 			infoLog.Printf("[%s] Performing action: Change Test Name", conn.RemoteAddr())
 			
 			test, ok := req["test"].(string)
@@ -153,16 +208,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)
 		}
 		
-		hardwareUpdateFields() // Где-то здесь должно быть обращение к установке для получения её полей
+		hardwareUpdateFields(state) // Где-то здесь должно быть обращение к установке для получения её полей
 		
-		resp := State{
-			Running:   state.Running,
-			StartTime: state.StartTime,
-			PausedAt:  state.PausedAt,
-			Name:      state.Name,
-			Test:      state.Test,
-			Fields:    state.Fields,
-		}
+		resp := *state
 		stateMutex.Unlock()
 
 		out := map[string]interface{}{
@@ -207,18 +255,33 @@ func hardwareCommand(command string) {
 }
 
 // В действительном исполнении эта функция должна быть подогнана под набор используемых полей, так что хардкод не большая проблема
-func hardwareUpdateFields() {
-	if state.Running && state.PausedAt.IsZero() {
-		state.Fields[0].Value = 115.2 + (float64(time.Now().Unix()%10) / 10.0) // Temperature
-		state.Fields[1].Value = 1500 + (int(time.Now().Unix()) % 100) // RPM
-		state.Fields[2].Value = 100 + (int(time.Now().Unix() * 7) % 15) // Power
+func hardwareUpdateFields(s *State) {
+	if s.Running && s.PausedAt.IsZero() {
+		s.Fields[0].Value = 115.2 + (float64(time.Now().Unix()%10) / 10.0) // Temperature
+		s.Fields[1].Value = 1500 + (int(time.Now().Unix()) % 100) // RPM
+		s.Fields[2].Value = 100 + (int(time.Now().Unix() * 7) % 15) // Power
 	} else {
-		state.Fields[0].Value = 25.0 // Temperature
-		state.Fields[1].Value = 0 // RPM
-		state.Fields[2].Value = 0 // Power
+		s.Fields[0].Value = 25.0 // Temperature
+		s.Fields[1].Value = 0 // RPM
+		s.Fields[2].Value = 0 // Power
 	} 
 	
 	//hardwareLog.Printf("Hardware fields updated!")
+}
+
+func resetFieldsToDefault(s *State) {
+	for i := range s.Fields {
+		switch s.Fields[i].Type {
+		case "string":
+			s.Fields[i].Value = ""
+		case "int":
+			s.Fields[i].Value = 0
+		case "float":
+			s.Fields[i].Value = 0.0
+		default:
+			s.Fields[i].Value = nil
+		}
+	}
 }
 
 func loadConfig(filename string) (*Config, error) {
@@ -239,56 +302,39 @@ func loadConfig(filename string) (*Config, error) {
 }
 
 func main() {
-	
 	// Загрузка конфига
-	cfg, err := loadConfig("config.json")
-	if err != nil {
+	var err error
+	cfg, err = loadConfig("config.json")
+	if err != nil || cfg == nil {
 		infoLog.Println("Unable to load config.json, falling back to defaults!")
-	} else { // Проверка на пустые значения
+		cfg = &Config{
+			Name:    serverName,
+			Address: serverAddress,
+			Key:     serverKey,
+			Fields: []Field{
+				{Id: "temperature", Name: "Температура, °C", Type: "float"},
+				{Id: "rpm", Name: "Обороты, об/мин", Type: "int"},
+				{Id: "power", Name: "Мощность, кВт", Type: "int"},
+			},
+		}
+	} else {
 		if cfg.Name != "" {
 			serverName = cfg.Name
-			state.Name = serverName // Установить название в состоянии
-		} else {
-			infoLog.Println("Value of field 'Name' not present in config, falling back to defaults!")
 		}
-		
 		if cfg.Address != "" {
 			serverAddress = cfg.Address
-		} else {
-			infoLog.Println("Value of field 'Address' not found in config, falling back to defaults!")
 		}
-		
 		if cfg.Key != "" {
 			serverKey = cfg.Key
-		} else {
-			infoLog.Println("Value of field 'Key' not found in config, falling back to defaults!")
 		}
 	}
-	
-	// Создание полей на основе значений конфига
-	stateFields := make([]StateField, len(cfg.Fields))
-	for i, field := range cfg.Fields {
-		switch field.Type {
-			case "string":
-				stateFields[i] = StateField{field.Id, field.Name, field.Type, ""}
-			case "int":
-				stateFields[i] = StateField{field.Id, field.Name, field.Type, 0}
-			case "float":
-				stateFields[i] = StateField{field.Id, field.Name, field.Type, 0.0}
-			default:
-				stateFields[i] = StateField{field.Id, field.Name, field.Type, nil}
-		}
-	}
-	state.Fields = stateFields
-	
-	state.Test = "001" // Устанавливаем значение теста заранее
-	
 	infoLog.Println("Config data loaded!")
-	
 	if serverKey == "" {
 		infoLog.Println("Note: An unset key is a large security risk!")
 	}
-	
+	// Инициализация первого теста
+	states["001"] = getOrCreateState("001", cfg)
+	// state = states["001"] // Удалено
 	fs := http.FileServer(http.Dir(filepath.Join("..", "Front")))
 	http.Handle("/", fs)
 	http.HandleFunc("/ws", wsHandler)
