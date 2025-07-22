@@ -64,6 +64,16 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			errorLog.Printf("[%s] Message unmarshalling error: %v", conn.RemoteAddr(), err)
 			continue
 		}
+		
+		// Проверка сообщения на ключ
+		key, ok := req["key"].(string)
+		if !ok {
+			errorLog.Printf("[%s] Invalid key type: %T", conn.RemoteAddr(), req["key"])
+			continue
+		}
+		if key != serverKey {
+			continue
+		}
 
 		stateMutex.Lock()
 		action, ok := req["action"].(string)
