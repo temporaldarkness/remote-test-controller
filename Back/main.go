@@ -90,6 +90,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case "status":
 			infoLog.Printf("[%s] Performing action: Status", conn.RemoteAddr())
+		case "ping":
+			break
 
 		default:
 			infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)

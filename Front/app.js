@@ -38,7 +38,7 @@ function startTimer() {
     // Интервал для запроса актуальных данных (температура, обороты) с сервера
     dataPollInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ action: "status" }));
+            ws.send(JSON.stringify({ action: "ping" }));
         }
     }, 1000); // Опрашиваем сервер каждую секунду
 }
