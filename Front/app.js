@@ -12,6 +12,8 @@ const btnStop = document.getElementById('btn-stop');
 const startTimeEl = document.getElementById('start-time');
 const tempEl = document.getElementById('temperature');
 const rpmEl = document.getElementById('rpm');
+const nameEl = document.getElementById('test-object');
+const testEl = document.getElementById('test-number');
 
 
 
@@ -70,6 +72,8 @@ ws.onmessage = function(event) {
     isPaused = data.paused;
     tempEl.textContent = data.temperature.toFixed(1);
     rpmEl.textContent = data.rpm;
+    nameEl.textContent = data.name;
+    testEl.textContent = data.test;
     if (data.startTime) {
         startTime = new Date(data.startTime);
     } else {

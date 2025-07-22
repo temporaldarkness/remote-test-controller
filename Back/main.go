@@ -11,12 +11,20 @@ import (
 	"time"
 )
 
+type Config struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	Key     string `json:"key"`
+}
+
 type State struct {
 	Running     bool      `json:"running"`
 	StartTime   time.Time `json:"startTime,omitempty"`
 	PausedAt    time.Time `json:"pausedAt,omitempty"` // Новое поле для времени паузы
 	RPM         int       `json:"rpm"`
 	Temperature float64   `json:"temperature"`
+	Test        string    `json:"test"` // Номер / название испытания
+	Name        string    `json:"name"` // Название установки
 }
 
 var (
@@ -27,6 +35,11 @@ var (
 	infoLog     = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog    = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 	hardwareLog = log.New(os.Stdout, "HARDWARE: ", log.Ldate|log.Ltime|log.Lshortfile)
+	
+	// Переменные конфига
+	serverName    = "Sample Test Object"
+	serverAddress = ":8080"
+	serverKey     = ""
 )
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -92,10 +105,22 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			infoLog.Printf("[%s] Performing action: Status", conn.RemoteAddr())
 		case "ping":
 			break
+		case "changeTest":
+			infoLog.Printf("[%s] Performing action: Change Test Name", conn.RemoteAddr())
+			
+			test, ok := req["test"].(string)
+			if ok && test != "" {
+				state.Test = test
+				
+				infoLog.Printf("[%s] Changed test name to: [%s]", conn.RemoteAddr(), state.Test)
+			} else {
+				errorLog.Printf("[%s] Invalid test name type: %T", conn.RemoteAddr(), req["test"])
+			}
 
 		default:
 			infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)
 		}
+		
 		if state.Running && state.PausedAt.IsZero() { // Работает
 			state.RPM = 1500 + (int(time.Now().Unix()) % 100) // Генерируем случайные обороты
 			state.Temperature = 115.2 + (float64(time.Now().Unix()%10) / 10.0)
@@ -109,6 +134,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			PausedAt:    state.PausedAt,
 			RPM:         state.RPM,
 			Temperature: state.Temperature,
+			Name:        state.Name,
+			Test:        state.Test,
 		}
 		stateMutex.Unlock()
 
@@ -117,6 +144,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			"paused":      !resp.PausedAt.IsZero(),
 			"rpm":         resp.RPM,
 			"temperature": resp.Temperature,
+			"name":        resp.Name,
+			"test":        resp.Test,
 		}
 		if !resp.StartTime.IsZero() {
 			out["startTime"] = resp.StartTime.Format(time.RFC3339)
@@ -148,10 +177,61 @@ func hardwareUnpause() {
 	hardwareLog.Printf("Hardware test unpause!")
 }
 
+func loadConfig(filename string) (*Config, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		errorLog.Printf("Config loading error: %v", err)
+		return nil, err
+	}
+	defer file.Close()
+	
+	var cfg Config
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&cfg); err != nil {
+		errorLog.Printf("Config decoding error: %v", err)
+		return nil, err
+	}
+	return &cfg, err
+}
+
 func main() {
+	
+	// Загрузка конфига
+	cfg, err := loadConfig("config.json")
+	if err != nil {
+		infoLog.Println("Unable to load config.json, falling back to defaults!")
+	} else { // Проверка на пустые значения
+		if cfg.Name != "" {
+			serverName = cfg.Name
+			state.Name = serverName // Установить название в состоянии
+		} else {
+			infoLog.Println("Value of field 'Name' not present in config, falling back to defaults!")
+		}
+		
+		if cfg.Address != "" {
+			serverAddress = cfg.Address
+		} else {
+			infoLog.Println("Value of field 'Address' not found in config, falling back to defaults!")
+		}
+		
+		if cfg.Key != "" {
+			serverKey = cfg.Key
+		} else {
+			infoLog.Println("Value of field 'Key' not found in config, falling back to defaults!")
+		}
+	}
+	
+	state.Test = "001" // Устанавливаем значение теста заранее
+	
+	infoLog.Println("Config data loaded!")
+	
+	if serverKey == "" {
+		infoLog.Println("Note: An unset key is a large security risk!")
+	}
+	
 	fs := http.FileServer(http.Dir(filepath.Join("..", "Front")))
 	http.Handle("/", fs)
 	http.HandleFunc("/ws", wsHandler)
-	infoLog.Println("Running on :8080!")
-	errorLog.Fatal(http.ListenAndServe(":8080", nil))
+	infoLog.Println("Running on ", serverAddress)
+	errorLog.Fatal(http.ListenAndServe(serverAddress, nil))
 }
