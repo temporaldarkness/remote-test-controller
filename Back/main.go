@@ -126,6 +126,15 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				errorLog.Printf("[%s] Invalid test name type: %T", conn.RemoteAddr(), req["test"])
 			}
+		case "command":
+			infoLog.Printf("[%s] Performing action: Command", conn.RemoteAddr())
+			
+			command, ok := req["command"].(string)
+			if ok && command != "" {
+				hardwareCommand(command)
+			} else {
+				errorLog.Printf("[%s] Invalid command type: %T", conn.RemoteAddr(), req["command"])
+			}
 
 		default:
 			infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)
@@ -185,6 +194,10 @@ func hardwarePause() {
 
 func hardwareUnpause() {
 	hardwareLog.Printf("Hardware test unpause!")
+}
+
+func hardwareCommand(command string) {
+	hardwareLog.Printf("Hardware command accepted: [%s]!", command)
 }
 
 func loadConfig(filename string) (*Config, error) {
