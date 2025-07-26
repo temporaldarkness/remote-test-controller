@@ -18,6 +18,7 @@ const testEl = document.getElementById('test-number');
 
 
 var key = "test_key" // До появления возможности редактировать ключ в пользовательском интерфейсе он остаётся хардкодом
+var test = "018" // Хардкод, нужно будет реализовать адекватно
 
 function updateTimer() {
     if (startTime && isRunning && !isPaused) {
@@ -41,7 +42,7 @@ function startTimer() {
     // Интервал для запроса актуальных данных (температура, обороты) с сервера
     dataPollInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ key: key, action: "ping" }));
+            ws.send(JSON.stringify({ key: key, test: test, action: "ping" }));
         }
     }, 1000); // Опрашиваем сервер каждую секунду
 }
@@ -64,7 +65,7 @@ function updateButtons() {
 }
 
 ws.onopen = function() {
-    ws.send(JSON.stringify({ key: key, action: "status" }));
+    ws.send(JSON.stringify({ key: key, test: test, action: "status" }));
 };
 
 ws.onmessage = function(event) {
@@ -97,13 +98,13 @@ ws.onmessage = function(event) {
 };
 
 btnStart.onclick = function() {
-    ws.send(JSON.stringify({ key: key, action: "start" }));
+    ws.send(JSON.stringify({ key: key, test: test, action: "start" }));
 };
 btnPause.onclick = function() {
-    ws.send(JSON.stringify({ key: key, action: "pause" }));
+    ws.send(JSON.stringify({ key: key, test: test, action: "pause" }));
 };
 btnStop.onclick = function() {
-    ws.send(JSON.stringify({ key: key, action: "stop" }));
+    ws.send(JSON.stringify({ key: key, test: test, action: "stop" }));
 };
 
 // Инициализация

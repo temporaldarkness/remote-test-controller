@@ -175,25 +175,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			infoLog.Printf("[%s] Performing action: Status", conn.RemoteAddr())
 		case "ping":
 			break
-		case "changeTest":
-			if t, ok := req["test"].(string); ok && t != "" {
-				state = getOrCreateState(t, cfg)
-				// УБРАТЬ сброс состояния!
-				// state.Running = false
-				// state.StartTime = time.Time{}
-				// state.PausedAt = time.Time{}
-				// resetFieldsToDefault(state)
-			}
-			infoLog.Printf("[%s] Performing action: Change Test Name", conn.RemoteAddr())
-			
-			test, ok := req["test"].(string)
-			if ok && test != "" {
-				state.Test = test
-				
-				infoLog.Printf("[%s] Changed test name to: [%s]", conn.RemoteAddr(), state.Test)
-			} else {
-				errorLog.Printf("[%s] Invalid test name type: %T", conn.RemoteAddr(), req["test"])
-			}
 		case "command":
 			infoLog.Printf("[%s] Performing action: Command", conn.RemoteAddr())
 			
