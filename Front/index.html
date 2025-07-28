@@ -4,10 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>Пульт управления испытанием</title>
+    <title>Пульт управления испытаниями</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="panel">
+        <h2>Прямое подключение</h2>
+        <div class="info-row">
+            <span class="info-label">Выбрать из списка</span>
+            <select id="presetSelect">
+                <option value="-1"></option>
+            </select>
+        </div>
+        <div class="info-row">
+            <span class="info-label">IP-адрес</span>
+            <input type="text" id="connection-ip" placeholder="127.0.0.1">
+        </div>
+        <div class="info-row">
+            <span class="info-label">Порт</span>
+            <input type="text" id="connection-port" placeholder="8080">
+        </div>
+        <div class="info-row">
+            <span class="info-label">Ключ</span>
+            <input type="password" id="connection-key">
+        </div>
+        <button id="btn-connection" class="connection-btn" title="Подключиться">Подключиться</button>
+    </div>
     <div class="panel">
         <h2>Испытание №<span id="test-number">000</span></h2>
         <div class="info-row">
@@ -43,9 +65,18 @@
                 <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="9" y="9" width="10" height="10" rx="2" fill="#6b7680"/></svg>
             </button>
         </div>
-        <div class="desc">
-            Модуль, который представляет собой пульт управления испытаниями для авиационных двигателей
+        <div class="desc" id="desc">Соединение закрыто</div>
+    </div>
+    <div class="panel">
+        <div class="info-row">
+            <span class="info-label">Выбор теста</span>
+            <input type="text" id="parameter-test" value="001">
         </div>
+        <div class="info-row">
+            <span class="info-label">Ввод команды</span>
+            <input type="text" id="parameter-command" value="">
+        </div>
+        <button id="btn-parameter" class="connection-btn" title="Отправить">Отправить</button>
     </div>
     <script src="app.js?v=1.1"></script>
 </body>

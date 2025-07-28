@@ -1,11 +1,11 @@
-const ws = new WebSocket("ws://localhost:8080/ws");
-
 let timerInterval = null;
 let dataPollInterval = null; // Новая переменная для интервала опроса данных
 let startTime = null;
 let isRunning = false;
 let isPaused = false;
 
+const btnConn = document.getElementById('btn-connection');
+const btnParam = document.getElementById('btn-parameter');
 const btnStart = document.getElementById('btn-start');
 const btnPause = document.getElementById('btn-pause');
 const btnStop = document.getElementById('btn-stop');
@@ -15,10 +15,31 @@ const rpmEl = document.getElementById('rpm');
 const powEl = document.getElementById('power');
 const nameEl = document.getElementById('test-object');
 const testEl = document.getElementById('test-number');
+const connAddress = document.getElementById('connection-ip');
+const connPort = document.getElementById('connection-port');
+const connKey = document.getElementById('connection-key');
+const paramTest = document.getElementById('parameter-test');
+const paramCommand = document.getElementById('parameter-command');
+const desc = document.getElementById('desc');
+const presetSelect = document.getElementById('presetSelect');
 
+var ws = null;
+var address = null;
+var port = null;
+var key = null;
+var test = "000";
 
-var key = "test_key" // До появления возможности редактировать ключ в пользовательском интерфейсе он остаётся хардкодом
-var test = "018" // Хардкод, нужно будет реализовать адекватно
+const presetTable = [
+	["Установка ПД-14", "127.0.0.1", "8080", "test_key"],
+	["Установка ПД-16", "127.0.0.1", "8075", ""],
+];
+
+for (let i = 0; i < presetTable.length; i++) {
+	let option = document.createElement('option');
+	option.value = i;
+	option.innerHTML = presetTable[i][0];
+	presetSelect.appendChild(option);
+}
 
 function updateTimer() {
     if (startTime && isRunning && !isPaused) {
@@ -64,11 +85,17 @@ function updateButtons() {
     btnStop.disabled = !isRunning;
 }
 
-ws.onopen = function() {
+function wsOnOpen() {
     ws.send(JSON.stringify({ key: key, test: test, action: "status" }));
 };
 
-ws.onmessage = function(event) {
+function wsOnClose() {
+    desc.innerHTML = "Соединение закрыто";
+}
+
+function wsOnMessage(event) {
+    desc.innerHTML = `${address}:${port}`;
+    
     const data = JSON.parse(event.data);
     isRunning = data.running;
     isPaused = data.paused;
@@ -98,14 +125,57 @@ ws.onmessage = function(event) {
 };
 
 btnStart.onclick = function() {
+    if (!ws) return;
     ws.send(JSON.stringify({ key: key, test: test, action: "start" }));
 };
 btnPause.onclick = function() {
+    if (!ws) return;
     ws.send(JSON.stringify({ key: key, test: test, action: "pause" }));
 };
 btnStop.onclick = function() {
+    if (!ws) return;
     ws.send(JSON.stringify({ key: key, test: test, action: "stop" }));
 };
+btnConn.onclick = function() {
+    address = connAddress.value || "";
+    port = connPort.value || "";
+    key = connKey.value || "";
+    if (!address || !port) return;
+    if (ws) ws.close();
+    desc.innerHTML = "Соединение закрыто";
+    ws = new WebSocket(`ws://${address}:${port}/ws`);
+    ws.onopen = wsOnOpen;
+    ws.onmessage = wsOnMessage;
+    ws.onclose = wsOnClose;
+};
+btnParam.onclick = function() {
+    command = paramCommand.value ?? "";
+    if (paramTest.value)
+        test = paramTest.value;
+    
+    if (command != "") {
+        ws.send(JSON.stringify({ key: key, test: test, action: "command", command: command }));
+    } else {
+        ws.send(JSON.stringify({ key: key, test: test, action: "status" }));
+    }
+    paramTest.value = "";
+    paramCommand.value = "";
+};
+presetSelect.addEventListener('change', function(){
+	let index = presetSelect.value;
+	
+	if (index == -1) {
+		connAddress.value = "";
+		connPort.value = "";
+		connKey.value = "";
+		
+		return;
+	}
+	
+	connAddress.value = presetTable[index][1];
+	connPort.value = presetTable[index][2];
+	connKey.value = presetTable[index][3];
+});
 
 // Инициализация
 startTimeEl.textContent = '00:00:00';
