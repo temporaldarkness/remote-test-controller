@@ -10,9 +10,6 @@ const btnStart = document.getElementById('btn-start');
 const btnPause = document.getElementById('btn-pause');
 const btnStop = document.getElementById('btn-stop');
 const startTimeEl = document.getElementById('start-time');
-const tempEl = document.getElementById('temperature');
-const rpmEl = document.getElementById('rpm');
-const powEl = document.getElementById('power');
 const nameEl = document.getElementById('test-object');
 const testEl = document.getElementById('test-number');
 const connAddress = document.getElementById('connection-ip');
@@ -21,13 +18,16 @@ const connKey = document.getElementById('connection-key');
 const paramTest = document.getElementById('parameter-test');
 const paramCommand = document.getElementById('parameter-command');
 const desc = document.getElementById('desc');
-const presetSelect = document.getElementById('presetSelect');
+const presetSelect = document.getElementById('preset-select');
+const infoGenerator = document.getElementById('info-generator');
 
 var ws = null;
 var address = null;
 var port = null;
 var key = null;
 var test = "000";
+
+var documentFields = [];
 
 const presetTable = [
 	["Установка ПД-14", "127.0.0.1", "8080", "test_key"],
@@ -75,14 +75,43 @@ function stopTimer() {
     dataPollInterval = null;
     startTimeEl.textContent = '00:00:00';
     // Сбрасываем поля при полной остановке
-    tempEl.textContent = '--';
-    rpmEl.textContent = '--';
+	documentFields.forEach(field => {
+		field.textContent = '--';
+	});
 }
 
 function updateButtons() {
     btnStart.disabled = isRunning && !isPaused;
     btnPause.disabled = !isRunning || isPaused;
     btnStop.disabled = !isRunning;
+}
+
+function createParameters(fields) {
+    if (!fields || fields.length == 0)
+		return;
+	
+	infoGenerator.textContent = '';
+	documentFields = [];
+	
+	fields.forEach(field => {
+		infoField = document.createElement('div');
+		infoField.classList.add('info-row');
+		
+		infoSpan = document.createElement('span');
+		infoSpan.classList.add('info-label');
+		infoSpan.innerHTML = field.name;
+		
+		numberSpan = document.createElement('span');
+		let v = field.value;
+		if (field.type == "float") v = v.toFixed(1);
+		if (field.type == "int") v = parseInt(v);
+		numberSpan.innerHTML = v;
+		documentFields[documentFields.length] = numberSpan;
+		
+		infoField.appendChild(infoSpan);
+		infoField.appendChild(numberSpan);
+		infoGenerator.appendChild(infoField);
+	});
 }
 
 function wsOnOpen() {
@@ -99,11 +128,8 @@ function wsOnMessage(event) {
     const data = JSON.parse(event.data);
     isRunning = data.running;
     isPaused = data.paused;
-    
-    // Хардкод, фронт должен будет генерировать таблицу исходя из посланных сервером полей
-    tempEl.textContent = data.fields[0].value.toFixed(1);
-    rpmEl.textContent = data.fields[1].value;
-    powEl.textContent = data.fields[2].value;
+    // Я не вижу никаких проблем с тем, чтобы создавать поля полностью и заново при каждом приёме сообщения.
+	createParameters(data.fields);
     nameEl.textContent = data.name;
     testEl.textContent = data.test;
     if (data.startTime) {
