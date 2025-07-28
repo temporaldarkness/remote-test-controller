@@ -44,7 +44,7 @@
 1.  **Клонируйте репозиторий:**
 
     ```bash
-    git clone <URL-вашего-репозитория>
+    git clone https://github.com/temporaldarkness/remote-test-controller.git
     ```
 
 2.  **Перейдите в папку с бэкендом:**
