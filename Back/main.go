@@ -138,14 +138,14 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		switch action {
 		case "start":
 			if !state.Running {
-				infoLog.Printf("[%s] Performing action: Start (Startup)", conn.RemoteAddr())
+				infoLog.Printf("[%s] [Test %s] Performing action: Start (Startup)", conn.RemoteAddr(), state.Test)
 				state.Running = true
 				state.StartTime = time.Now().UTC()
 				state.PausedAt = time.Time{}
 				resetFieldsToDefault(state)
 				hardwareStart()
 			} else if !state.PausedAt.IsZero() {
-				infoLog.Printf("[%s] Performing action: Start (Unpause)", conn.RemoteAddr())
+				infoLog.Printf("[%s] [Test %s] Performing action: Start (Unpause)", conn.RemoteAddr(), state.Test)
 				now := time.Now().UTC()
 				state.StartTime = state.StartTime.Add(now.Sub(state.PausedAt))
 				state.PausedAt = time.Time{}
@@ -153,13 +153,13 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case "pause":
 			if state.Running && state.PausedAt.IsZero() {
-				infoLog.Printf("[%s] Performing action: Pause", conn.RemoteAddr())
+				infoLog.Printf("[%s] [Test %s] Performing action: Pause", conn.RemoteAddr(), state.Test)
 				state.PausedAt = time.Now().UTC()
 				hardwarePause()
 			}
 		case "stop":
 			if state.Running {
-				infoLog.Printf("[%s] Performing action: Stop", conn.RemoteAddr())
+				infoLog.Printf("[%s] [Test %s] Performing action: Stop", conn.RemoteAddr(), state.Test)
 				state.Running = false
 				state.StartTime = time.Time{}
 				state.PausedAt = time.Time{}
@@ -172,21 +172,21 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			state.PausedAt = time.Time{}
 			resetFieldsToDefault(state)
 		case "status":
-			infoLog.Printf("[%s] Performing action: Status", conn.RemoteAddr())
+			infoLog.Printf("[%s] [Test %s] Performing action: Status", conn.RemoteAddr(), state.Test)
 		case "ping":
 			break
 		case "command":
-			infoLog.Printf("[%s] Performing action: Command", conn.RemoteAddr())
+			infoLog.Printf("[%s] [Test %s] Performing action: Command", conn.RemoteAddr(), state.Test)
 			
 			command, ok := req["command"].(string)
 			if ok && command != "" {
 				hardwareCommand(command)
 			} else {
-				errorLog.Printf("[%s] Invalid command type: %T", conn.RemoteAddr(), req["command"])
+				errorLog.Printf("[%s] [Test %s] Invalid command type: %T", conn.RemoteAddr(), state.Test, req["command"])
 			}
 
 		default:
-			infoLog.Printf("[%s] Unknown action: %v", conn.RemoteAddr(), action)
+			infoLog.Printf("[%s] [Test %s] Unknown action: %v", conn.RemoteAddr(), state.Test, action)
 		}
 		
 		hardwareUpdateFields(state) // Где-то здесь должно быть обращение к установке для получения её полей
